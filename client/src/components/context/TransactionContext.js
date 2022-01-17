@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, createContext } from "react";
 import { ethers } from "ethers";
 
 import { contractABI, contractAddress } from "../../utils/constants";
 
 const { ethereum } = window;
+
+export const TransactionContext = createContext();
 
 const createEthereumContract = () => {
   const provider = new ethers.providers.Web3Provider(ethers);
@@ -35,6 +37,38 @@ export const TransactionProvider = ({ children }) => {
     setFormData((prevState) => ({ ...prevState, [name]: e.target.value }));
   };
 
+  const getAllTransactions = async () => {
+    try {
+      if (ethereum) {
+        const transactionContract = createEthereumContract();
+        const availableTransactions =
+          await transactionsContract.getAllTransactions();
+
+        const structuredTransactions = availableTransactions.map(
+          (transaction) => ({
+            addressTo: transaction.receiver,
+            addressFrom: transaction.sender,
+            timestamp: new Date(
+              transaction.timestamp.toNumber() * 1000
+            ).toLocaleString(),
+            message: transaction.message,
+            keyword: transaction.keyword,
+            amount: parseInt(transaction.amount._hex) / 10 ** 18,
+          })
+        );
+
+        setTransactions();
+      } else {
+        console.log("ethereum is not present");
+      }
+    } catch (err) {
+      console.log(err);
+      throw new Error(
+        "something is wrong with your ethereum, please try again"
+      );
+    }
+  };
+
   const walletValidate = async () => {
     try {
       if (!ethereum) return alert("please connect wallter");
@@ -52,7 +86,7 @@ export const TransactionProvider = ({ children }) => {
 
   const connectWallet = async () => {
     try {
-      if (!ether) return alert("Please connect metamask");
+      if (!ethereum) return alert("Please connect metamask");
       const accounts = await ethereum.request({
         method: "eth_requestAccounts",
       });
@@ -63,4 +97,74 @@ export const TransactionProvider = ({ children }) => {
       throw new Error(err);
     }
   };
+
+  const transactionValidation = async () => {
+    try {
+      if (ethereum) {
+        const transactionsContract = createEthereumContract();
+        const currentTransactionCount =
+          await transactionsContract.getTransactionCount();
+
+        window.localStorage.setItem(
+          "transactionCount",
+          currentTransactionCount
+        );
+      }
+    } catch (err) {
+      console.log(err);
+      throw new Error("false transaction");
+    }
+  };
+
+  const sendTransaction = async () => {
+    try {
+      if (ethereum) {
+        const { addressTo, amount, keyowrd, message } = formData;
+        const transactionsContract = createEthereumContract();
+        const parsedAmount = await transactionsContract.addToBlockChain(
+          addressTo,
+          parsedAmount,
+          message,
+          keyword
+        );
+
+        setIsLoading(true);
+        console.log(`Loading - ${transactionHash.hash}`);
+        await transactionHash.wait();
+        console.log(`Success - ${transactionHash.hash}`);
+        setIsLoading(false);
+
+        const transactionsCount =
+          await transactionsContract.getTransactionCount();
+        setTransactionCount(transactionsCount.toNumber());
+      } else {
+        console.log("no ethereum object");
+      }
+    } catch (err) {
+      console.log(err);
+      throw new Error("transaction not valid");
+    }
+  };
+
+  useEffect(() => {
+    walletValidate();
+    transactionValidation();
+  }, [transactionCount]);
+
+  return (
+    <TransactionContext.Provider
+      value={{
+        transactionCount,
+        connectWallet,
+        transactions,
+        currentAccount,
+        isLoading,
+        sendTransaction,
+        handleChange,
+        formData,
+      }}
+    >
+      {children}
+    </TransactionContext.Provider>
+  );
 };
